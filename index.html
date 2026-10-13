@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Traffic Monitor</title>
+
+  <!-- Leaflet.js CSS (map styling) from CDN -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+
+  <!-- Google font for a clean, readable look -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <style>
+    /* =========================================================
+       GLOBAL RESET + THEME VARIABLES (blue & white design)
+       ========================================================= */
+    :root {
+      --blue-600: #2563eb;   /* primary blue */
+      --blue-700: #1d4ed8;   /* darker blue for hover */
+      --blue-50: #eff6ff;    /* very light blue background */
+      --blue-100: #dbeafe;   /* light blue */
+      --ink: #0f172a;        /* near-black text */
+      --muted: #64748b;      /* grey text */
+      --card-bg: #ffffff;    /* white card */
+      --border: #e2e8f0;     /* light border */
+      --green: #22c55e;      /* low congestion */
+      --yellow: #eab308;     /* medium congestion */
+      --red: #ef4444;        /* high congestion */
+      --shadow: 0 6px 20px rgba(37, 99, 235, 0.08);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Poppins", system-ui, sans-serif;
+      background: var(--blue-50);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    /* =========================================================
+       TOP NAVIGATION BAR
+       ========================================================= */
+    header {
+      background: linear-gradient(90deg, var(--blue-600), var(--blue-700));
+      color: #fff;
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+
+    .nav-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.25rem;
+      letter-spacing: 0.3px;
+    }
+
+    .brand .logo {
+      width: 34px;
+      height: 34px;
+      background: #fff;
+      color: var(--blue-600);
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      font-size: 1.1rem;
+    }
+
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 6px;
+    }
+
+    nav a {
+      color: rgba(255, 255, 255, 0.85);
+      text-decoration: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 500;
+      font-size: 0.95rem;
+      transition: background 0.2s, color 0.2s;
+      cursor: pointer;
+    }
+
+    nav a:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    nav a.active {
+      background: #fff;
+      color: var(--blue-700);
+    }
+
+    /* =========================================================
+       PAGE CONTAINER + SHOW/HIDE LOGIC
+       ========================================================= */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 28px 20px 60px;
+    }
+
+    .page {
+      display: none; /* hidden by default; JS toggles .active */
+      animation: fadeIn 0.35s ease;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .page-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .page-subtitle {
+      color: var(--muted);
+      margin-bottom: 22px;
+      font-size: 0.95rem;
+    }
+
+    /* =========================================================
+       SUMMARY CARDS (Home page)
+       ========================================================= */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      transition: transform 0.2s;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+    }
+
+    .card .icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-size: 1.5rem;
+      flex-shrink: 0;
+    }
+
+    .icon.blue   { background: var(--blue-100);  color: var(--blue-600); }
+    .icon.red    { background: #fee2e2;          color: var(--red); }
+    .icon.green  { background: #dcfce7;          color: var(--green); }
+    .icon.yellow { background: #fef9c3;          color: var(--yellow); }
+
+    .card .label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 500;
+    }
+
+    .card .value {
+      font-size: 1.7rem;
+      font-weight: 700;
+      line-height: 1.1;
+      margin-top: 2px;
+    }
+
+    .card .unit {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    /* =========================================================
+       MAP
+       ========================================================= */
+    .map-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .map-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .map-header h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .legend {
+      display: flex;
+      gap: 16px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .legend span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot.green  { background: var(--green); }
+    .dot.yellow { background: var(--yellow); }
+    .dot.red    { background: var(--red); }
+
+    #map {
+      height: 480px;
+      width: 100%;
+      z-index: 1;
+    }
+
+    /* =========================================================
+       FORMS / SELECT DROPDOWN + RESULT PANELS
+       ========================================================= */
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 26px;
+      box-shadow: var(--shadow);
+      max-width: 640px;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 0.95rem;
+    }
+
+    select {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 1rem;
+      background: #fff;
+      color: var(--ink);
+      cursor: pointer;
+      margin-bottom: 22px;
+    }
+
+    select:focus {
+      outline: 2px solid var(--blue-600);
+      outline-offset: 1px;
+    }
+
+    .result-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .result-box {
+      background: var(--blue-50);
+      border: 1px solid var(--blue-100);
+      border-radius: 12px;
+      padding: 18px;
+      text-align: center;
+    }
+
+    .result-box .label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 500;
+    }
+
+    .result-box .value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-top: 6px;
+      color: var(--blue-700);
+    }
+
+    .result-box .unit {
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    /* Congestion level pill */
+    .pill {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #fff;
+      margin-top: 8px;
+    }
+    .pill.low    { background: var(--green); }
+    .pill.medium { background: var(--yellow); }
+    .pill.high   { background: var(--red); }
+
+    /* =========================================================
+       CHART (Trends page)
+       ========================================================= */
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 26px;
+      box-shadow: var(--shadow);
+    }
+
+    .chart-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .chart-toolbar select {
+      margin-bottom: 0;
+      max-width: 280px;
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 380px;
+    }
+
+    /* =========================================================
+       ABOUT PAGE
+       ========================================================= */
+    .about-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 34px;
+      box-shadow: var(--shadow);
+      max-width: 780px;
+    }
+
+    .about-panel h2 {
+      color: var(--blue-700);
+      font-size: 1.4rem;
+      margin-bottom: 16px;
+      line-height: 1.3;
+    }
+
+    .about-panel p {
+      color: var(--muted);
+      line-height: 1.7;
+      margin-bottom: 18px;
+    }
+
+    .team-title {
+      font-weight: 700;
+      font-size: 1.05rem;
+      margin: 20px 0 10px;
+      color: var(--ink);
+    }
+
+    .team-list {
+      list-style: none;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .team-list li {
+      background: var(--blue-50);
+      border: 1px solid var(--blue-100);
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 500;
+    }
+
+    .team-list .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--blue-600);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .feature-list {
+      list-style: none;
+      margin-top: 8px;
+    }
+    .feature-list li {
+      padding: 8px 0 8px 28px;
+      position: relative;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .feature-list li::before {
+      content: "✔";
+      position: absolute;
+      left: 0;
+      color: var(--green);
+      font-weight: 700;
+    }
+
+    /* =========================================================
+       RESPONSIVE (mobile-friendly)
+       ========================================================= */
+    @media (max-width: 900px) {
+      .cards { grid-template-columns: repeat(2, 1fr); }
+      .result-grid { grid-template-columns: 1fr; }
+      .team-list { grid-template-columns: 1fr; }
+      nav a { padding: 8px 10px; font-size: 0.85rem; }
+      .brand { font-size: 1rem; }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- =======================================================
+       HEADER + NAVIGATION
+       Clicking a link calls showPage() to switch sections
+       ======================================================= -->
+  <header>
+    <div class="nav-inner">
+      <div class="brand">
+        <span class="logo">🚦</span>
+        Smart Traffic Monitor
+      </div>
+      <nav>
+        <ul>
+          <li><a class="active" data-page="home" onclick="showPage('home')">Home</a></li>
+          <li><a data-page="search" onclick="showPage('search')">Search Road</a></li>
+          <li><a data-page="trends" onclick="showPage('trends')">Trends</a></li>
+          <li><a data-page="about" onclick="showPage('about')">About</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <!-- =====================================================
+         PAGE 1: HOME  — summary cards + live map
+         ===================================================== -->
+    <section id="home" class="page active">
+      <h1 class="page-title">Live Traffic Overview</h1>
+      <p class="page-subtitle">
+        Real-time congestion across major Hyderabad roads (simulated data, updates every 5 seconds).
+      </p>
+
+      <!-- 4 summary cards, filled by updateCards() -->
+      <div class="cards">
+        <div class="card">
+          <div class="icon blue">🛣️</div>
+          <div>
+            <div class="label">Roads Monitored</div>
+            <div class="value" id="card-total">0</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="icon red">🚗</div>
+          <div>
+            <div class="label">Roads Congested Now</div>
+            <div class="value" id="card-congested">0</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="icon green">⚡</div>
+          <div>
+            <div class="label">Average Speed</div>
+            <div class="value"><span id="card-speed">0</span> <span class="unit">km/h</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="icon yellow">🕒</div>
+          <div>
+            <div class="label">Last Updated</div>
+            <div class="value" id="card-time" style="font-size:1.2rem;">--:--:--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Leaflet map -->
+      <div class="map-card">
+        <div class="map-header">
+          <h3>📍 Hyderabad Road Map</h3>
+          <div class="legend">
+            <span><i class="dot green"></i> Low</span>
+            <span><i class="dot yellow"></i> Medium</span>
+            <span><i class="dot red"></i> High</span>
+          </div>
+        </div>
+        <div id="map"></div>
+      </div>
+    </section>
+
+    <!-- =====================================================
+         PAGE 2: SEARCH ROAD — pick a road, see its stats
+         ===================================================== -->
+    <section id="search" class="page">
+      <h1 class="page-title">Search a Road</h1>
+      <p class="page-subtitle">Choose a road to view its live speed, vehicle count and predicted congestion.</p>
+
+      <div class="panel">
+        <label for="roadSelect">Select Road</label>
+        <select id="roadSelect" onchange="onSearchRoadChange()"></select>
+
+        <div class="result-grid">
+          <div class="result-box">
+            <div class="label">Current Speed</div>
+            <div class="value"><span id="search-speed">--</span> <span class="unit">km/h</span></div>
+          </div>
+          <div class="result-box">
+            <div class="label">Vehicle Count</div>
+            <div class="value" id="search-count">--</div>
+          </div>
+          <div class="result-box">
+            <div class="label">Predicted Congestion</div>
+            <div><span class="pill" id="search-level">--</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================
+         PAGE 3: TRENDS — line chart of speed over the day
+         ===================================================== -->
+        <section id="trends" class="page">
+      <h1 class="page-title">Traffic Trends</h1>
+      <p class="page-subtitle">Average speed per hour from the readings stored in Firebase (simulated data). Dot colours show the ML model's predicted congestion.</p>
+
+      <div class="chart-card">
+        <div class="chart-toolbar">
+          <label for="trendSelect" style="margin:0;">Road</label>
+          <select id="trendSelect" onchange="onTrendRoadChange()"></select>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="trendChart"></canvas>
+        </div>
+        <p id="trendNote" style="margin-top:14px; color:var(--muted); font-size:0.85rem;"></p>
+      </div>
+    </section>
+    <!-- =====================================================
+         PAGE 4: ABOUT — project + team
+         ===================================================== -->
+    <section id="about" class="page">
+      <h1 class="page-title">About This Project</h1>
+      <p class="page-subtitle">Project details and the team behind Smart Traffic Monitor.</p>
+
+      <div class="about-panel">
+        <h2>Cloud-Based Predictive Analytics for Real-Time Traffic Monitoring</h2>
+          <p>
+    Smart Traffic Monitor is an academic project that demonstrates how cloud-based
+    predictive analytics can be used to monitor city traffic. Traffic readings (speed and
+    vehicle count) are simulated by a Python program and stored in Firebase Realtime
+    Database. A Random Forest model, served by a Flask API, predicts congestion levels,
+    and the results are shown on an interactive map and charts. All traffic data is simulated.
+  </p>
+
+        <div class="team-title">What it does</div>
+        <ul class="feature-list">
+          <li>Monitors 6 major roads in Hyderabad and colour-codes congestion (green / yellow / red).</li>
+          <li>Generates new speed and vehicle-count data every 5 seconds using a traffic model.</li>
+          <li>Models rush-hour peaks at 8–10 AM and 6–8 PM when roads get busiest.</li>
+          <li>Predicts the current congestion level for any selected road.</li>
+          <li>Shows a 24-hour speed trend chart so patterns across the day are easy to read.</li>
+        </ul>
+
+        <div class="team-title">Tech Stack</div>
+  <p>HTML, CSS and JavaScript · Leaflet.js (maps) · Chart.js (charts) · Python Flask (API) · scikit-learn Random Forest (prediction) · Firebase Realtime Database (cloud storage).</p>
+        <div class="team-title">Our Team</div>
+        <ul class="team-list">
+          <li><span class="avatar">A</span> Manognya Gouda</li>
+          <li><span class="avatar">B</span> Potharaju Divya</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <!-- =======================================================
+       LIBRARIES FROM CDN (Leaflet map + Chart.js charts)
+       ======================================================= -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <script>
+    /* =========================================================
+       1. DATA SETUP
+       Six real Hyderabad roads with coordinates. Each road has
+       a "base" speed and vehicle count that the simulation
+       scales up/down depending on the time of day.
+       ========================================================= */
+    const roads = [
+      { id: 1, name: "MG Road (Gachibowli)",      lat: 17.4401, lng: 78.3489, baseSpeed: 55, baseCount: 420 },
+      { id: 2, name: "Tank Bund Road",            lat: 17.4239, lng: 78.4685, baseSpeed: 50, baseCount: 380 },
+      { id: 3, name: "Hitech City Main Road",     lat: 17.4470, lng: 78.3809, baseSpeed: 60, baseCount: 500 },
+      { id: 4, name: "Begumpet Main Road",        lat: 17.4436, lng: 78.4636, baseSpeed: 45, baseCount: 360 },
+      { id: 5, name: "LB Nagar Ring Road",        lat: 17.3457, lng: 78.5522, baseSpeed: 52, baseCount: 340 },
+      { id: 6, name: "Kukatpally (JNTU) Road",    lat: 17.4932, lng: 78.3916, baseSpeed: 48, baseCount: 400 },
+    ];
+
+    /* Colours that match the congestion levels */
+    const COLORS = {
+      low:    "#22c55e",
+      medium: "#eab308",
+      high:   "#ef4444",
+    };
+
+    /* Shared variables used across the app */
+    let map;            // Leaflet map object
+    let markers = {};   // road id -> Leaflet circle marker
+    let trendChart;     // Chart.js chart instance
+
+    /* =========================================================
+       2. TRAFFIC MODEL
+       congestionFactor(hour) returns a number ~0.15 to ~1.3.
+       It is lowest at night and highest during the two rush
+       hours. We add three bell curves (Gaussians) centred at
+       9 AM, 1 PM and 7 PM.
+       ========================================================= */
+    function bell(hour, centre, width) {
+      return Math.exp(-Math.pow(hour - centre, 2) / (2 * width * width));
+    }
+
+    function congestionFactor(hour) {
+      let f = 0.18;                                  // night baseline
+      f += 0.85 * bell(hour, 9, 1.3);                // 8–10 AM peak
+      f += 0.80 * bell(hour, 19, 1.6);               // 6–8 PM peak
+      f += 0.30 * bell(hour, 13, 3.0);               // mild midday traffic
+      return f;
+    }
+
+    /* =========================================================
+       3. SIMULATION — create fresh speed + count for a road
+       More traffic => more vehicles AND lower speed.
+       A little randomness keeps the numbers feeling "live".
+       ========================================================= */
+    function simulateRoad(road) {
+      const hour = new Date().getHours();
+      const factor = congestionFactor(hour);
+
+      const count = Math.round(road.baseCount * factor * (0.85 + Math.random() * 0.3));
+      let speed = road.baseSpeed * (1.55 - 0.6 * factor) * (0.9 + Math.random() * 0.2);
+
+      // Keep values in a sensible range
+      speed = Math.max(6, Math.min(75, Math.round(speed)));
+
+      road.speed = speed;
+      road.count = Math.max(20, count);
+      road.congestion = congestionFromSpeed(speed);
+    }
+
+    /* Turn a speed value into a congestion level */
+    function congestionFromSpeed(speed) {
+      if (speed >= 40) return "low";
+      if (speed >= 20) return "medium";
+      return "high";
+    }
+
+    /* Human label for the congestion level */
+    function congestionLabel(level) {
+      return { low: "Low", medium: "Medium", high: "High" }[level];
+    }
+
+    /* =========================================================
+       4. MAP (Leaflet)
+       initMap() centres on Hyderabad and adds one coloured
+       circle marker per road. updateMap() recolours them.
+       ========================================================= */
+        function initMap() {
+      map = L.map("map").setView([17.3850, 78.4867], 12); // Hyderabad
+
+      // CARTO Voyager basemap with free API key
+      L.tileLayer(
+        "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_4hll_1_e2559e4951bd01edce0125cf",
+        {
+          maxZoom: 19,
+          attribution:
+            '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, © <a href="https://carto.com/attributions">CARTO</a>',
+        }
+      ).addTo(map);
+
+      // Create a circle marker for every road
+      roads.forEach((road) => {
+        const marker = L.circleMarker([road.lat, road.lng], {
+          radius: 14,
+          color: "#ffffff",       // white ring
+          weight: 2,
+          fillColor: COLORS.low,  // start green, updated later
+          fillOpacity: 0.95,
+        }).addTo(map);
+
+        marker.bindTooltip(road.name, { direction: "top", offset: [0, -10] });
+        marker.bindPopup(road.name);
+        marker.on("click", () => focusRoadOnMap(road.id));
+        markers[road.id] = marker;
+      });
+    }
+
+    /* Recentre the map and open a popup when a marker is clicked */
+    function focusRoadOnMap(id) {
+      const road = roads.find((r) => r.id === id);
+      if (!road) return;
+      map.setView([road.lat, road.lng], 14, { animate: true });
+      markers[id].openPopup();
+    }
+
+    /* Recolour every marker based on the latest speed */
+    function updateMap() {
+      roads.forEach((road) => {
+        const marker = markers[road.id];
+        marker.setStyle({ fillColor: COLORS[road.congestion] });
+        marker.setPopupContent(
+          `<strong>${road.name}</strong><br>
+           Speed: ${road.speed} km/h<br>
+           Vehicles: ${road.count}<br>
+           Congestion: ${congestionLabel(road.congestion)}`
+        );
+      });
+    }
+
+    /* =========================================================
+       5. SUMMARY CARDS (Home page)
+       ========================================================= */
+    function updateCards() {
+      const total = roads.length;
+      const congested = roads.filter((r) => r.congestion === "high").length;
+      const avgSpeed = Math.round(
+        roads.reduce((sum, r) => sum + r.speed, 0) / total
+      );
+      const now = new Date().toLocaleTimeString();
+
+      document.getElementById("card-total").textContent = total;
+      document.getElementById("card-congested").textContent = congested;
+      document.getElementById("card-speed").textContent = avgSpeed;
+      document.getElementById("card-time").textContent = now;
+    }
+
+    /* =========================================================
+       6. SEARCH ROAD PAGE
+       Fill the dropdown, then show the chosen road's stats.
+       ========================================================= */
+    function fillRoadDropdowns() {
+      const searchSelect = document.getElementById("roadSelect");
+      const trendSelect = document.getElementById("trendSelect");
+
+      roads.forEach((road) => {
+        const opt1 = new Option(road.name, road.id);
+        const opt2 = new Option(road.name, road.id);
+        searchSelect.add(opt1);
+        trendSelect.add(opt2);
+      });
+    }
+
+    /* Called when the Search dropdown changes */
+    function onSearchRoadChange() {
+      updateSearchPanel();
+    }
+
+    /* Draw the Search page numbers for the selected road */
+    function updateSearchPanel() {
+      const id = Number(document.getElementById("roadSelect").value);
+      const road = roads.find((r) => r.id === id);
+      if (!road) return;
+
+      document.getElementById("search-speed").textContent = road.speed;
+      document.getElementById("search-count").textContent = road.count;
+
+      const pill = document.getElementById("search-level");
+      pill.textContent = congestionLabel(road.congestion);
+      pill.className = "pill " + road.congestion; // low / medium / high
+    }
+
+        /* =========================================================
+       7. TRENDS CHART (Chart.js)
+       Line  = average speed per hour from the readings stored in
+               Firebase (simulated readings, last 24 hours).
+       Dots  = colour of the ML model's predicted congestion for
+               that hour. The big dot is the current hour.
+       If the /trend request fails, the old simulated curve is shown.
+       ========================================================= */
+    let trendMeta = { predicted: [], samples: [], fromFirebase: false };
+
+    /* Old simulated curve - kept only as a fallback */
+    function buildTrendData(road) {
+      const labels = [];
+      const data = [];
+      for (let h = 0; h < 24; h++) {
+        labels.push(`${h}:00`);
+        const factor = congestionFactor(h);
+        const speed = road.baseSpeed * (1.55 - 0.6 * factor);
+        data.push(Math.round(speed));
+      }
+      return { labels, data };
+    }
+
+    function initChart() {
+      const ctx = document.getElementById("trendChart").getContext("2d");
+      trendChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: "Average speed (km/h)",
+              data: [],
+              borderColor: "#2563eb",
+              backgroundColor: "rgba(37, 99, 235, 0.12)",
+              fill: true,
+              tension: 0.35,
+              spanGaps: true,
+              pointRadius: 5,
+              pointBackgroundColor: "#2563eb",
+              pointBorderColor: "#fff",
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { font: { family: "Poppins" } } },
+            tooltip: {
+              callbacks: {
+                label: (c) => ` ${c.parsed.y} km/h`,
+                afterLabel: (c) => {
+                  const i = c.dataIndex;
+                  const lines = [];
+                  if (trendMeta.predicted[i]) {
+                    lines.push("ML predicted congestion: " + congestionLabel(trendMeta.predicted[i]));
+                  }
+                  if (trendMeta.fromFirebase && trendMeta.samples[i]) {
+                    lines.push("Readings averaged: " + trendMeta.samples[i]);
+                  }
+                  return lines;
+                },
+              },
+            },
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: "Speed (km/h)" },
+            },
+            x: {
+              title: { display: true, text: "Hour of day" },
+            },
+          },
+        },
+      });
+      updateChart();   // load the first data
+    }
+
+    /* Called when the Trends dropdown changes */
+    function onTrendRoadChange() {
+      updateChart();
+    }
+
+    /* Load /trend for the selected road and redraw the chart */
+    async function updateChart() {
+      const id = Number(document.getElementById("trendSelect").value);
+      const road = roads.find((r) => r.id === id);
+      if (!road || !trendChart) return;
+
+      const labels = [];
+      for (let h = 0; h < 24; h++) labels.push(`${h}:00`);
+      const currentHour = new Date().getHours();
+      const note = document.getElementById("trendNote");
+
+      let data;
+      let predicted = [];
+      let samples = [];
+      let fromFirebase = false;
+
+      try {
+        const response = await fetch(`/trend?road_id=${id}`);
+        if (!response.ok) throw new Error(`Trend API returned HTTP ${response.status}`);
+        const trend = await response.json();
+        data = trend.avg_speed;
+        predicted = trend.predicted_congestion;
+        samples = trend.samples;
+        fromFirebase = true;
+        if (note) {
+          note.textContent =
+            "Line: average speed per hour from readings stored in Firebase (last 24 hours, simulated data). " +
+            "Dot colour: congestion level predicted by the ML model for that hour. Large dot: current hour.";
+        }
+      } catch (error) {
+        console.error("Could not load trend data:", error);
+        data = buildTrendData(road).data;   // fallback: old simulated curve
+        if (note) {
+          note.textContent =
+            "Stored data is not available, so a simulated speed curve is shown instead.";
+        }
+      }
+
+      trendMeta = { predicted, samples, fromFirebase };
+
+      const ds = trendChart.data.datasets[0];
+      trendChart.data.labels = labels;
+      ds.data = data;
+      ds.label = fromFirebase
+        ? "Average speed from stored readings (km/h)"
+        : "Simulated speed curve (km/h)";
+      ds.pointBackgroundColor = labels.map((_, i) =>
+        fromFirebase && COLORS[predicted[i]] ? COLORS[predicted[i]] : "#2563eb"
+      );
+      ds.pointRadius = labels.map((_, i) => (i === currentHour ? 9 : 5));
+      trendChart.update();
+    }
+
+    /* =========================================================
+       8. PAGE NAVIGATION
+       Show only the clicked page and highlight the nav link.
+       ========================================================= */
+    function showPage(pageId) {
+      // Toggle page sections
+      document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
+      document.getElementById(pageId).classList.add("active");
+
+      // Toggle nav link styling
+      document.querySelectorAll("nav a").forEach((a) => a.classList.remove("active"));
+      document.querySelector(`nav a[data-page="${pageId}"]`).classList.add("active");
+
+      // Leaflet needs a nudge to resize when its container becomes visible
+      if (pageId === "home" && map) {
+        setTimeout(() => map.invalidateSize(), 200);
+      }
+            if (pageId === "trends" && trendChart) {
+        trendChart.resize();
+        updateChart();   // reload stored data each time the page is opened
+      }
+    }
+
+    /* =========================================================
+       9. MASTER UPDATE + 5-SECOND TIMER
+       Every tick we re-simulate all roads and refresh the UI.
+       ========================================================= */
+    
+
+const MAX_AGE_SECONDS = 30; // ignore Firebase readings older than this
+
+async function refreshAll() {
+  // 1. Keep simulated values as a fallback.
+  roads.forEach(simulateRoad);
+  roads.forEach((r) => { r.dataSource = "simulated"; });
+
+  // 2. Read the latest speed and vehicle count from Firebase.
+  try {
+    const response = await fetch("/latest");
+
+    if (!response.ok) {
+      throw new Error(`Firebase readings returned HTTP ${response.status}`);
+    }
+
+    const readings = await response.json();
+    let used = 0;
+
+    readings.forEach((reading) => {
+      // Skip old readings (simulator.py probably stopped)
+      if (Number(reading.age_seconds) > MAX_AGE_SECONDS) return;
+
+      const road = roads.find((r) => r.id === Number(reading.road_id));
+
+      if (road) {
+        road.speed = Number(reading.speed);
+        road.count = Number(reading.vehicle_count);
+        road.vehicleCount = Number(reading.vehicle_count);
+        road.dataSource = "firebase";
+        used++;
+      }
+    });
+
+    if (used === 0) {
+      console.warn("Firebase data is older than " + MAX_AGE_SECONDS +
+        " s (is simulator.py running?). Using simulated fallback.");
+    } else {
+      console.log("Firebase readings used for " + used + " roads:", readings);
+    }
+  } catch (error) {
+    console.error("Could not fetch Firebase readings:", error);
+    // Simulated speed and vehicle count remain as fallback.
+  }
+
+  // 3. Get congestion predictions from the trained ML model.
+  try {
+    const response = await fetch("/predict_all");
+
+    if (!response.ok) {
+      throw new Error(`ML API returned HTTP ${response.status}`);
+    }
+
+    const predictions = await response.json();
+
+    predictions.forEach((prediction) => {
+      const road = roads.find((r) => r.id === Number(prediction.road_id));
+
+      if (road && COLORS[prediction.congestion]) {
+        road.congestion = prediction.congestion;
+        road.confidence = prediction.confidence;
+      }
+    });
+
+    console.log("ML predictions received:", predictions);
+  } catch (error) {
+    console.error("Could not fetch ML predictions:", error);
+    // Keep the existing congestion values as fallback.
+  }
+
+  // 4. Refresh the dashboard.
+  updateMap();
+  updateCards();
+  updateSearchPanel();
+}
+
+
+
+    /* =========================================================
+       10. START THE APP
+       ========================================================= */
+    window.addEventListener("DOMContentLoaded", () => {
+      initMap();                 // draw the map
+      fillRoadDropdowns();       // populate both dropdowns
+      initChart();               // build the trends chart
+      refreshAll();              // first data fill
+      setInterval(refreshAll, 5000); // refresh every 5 seconds
+    });
+  </script>
+</body>
+</html>
