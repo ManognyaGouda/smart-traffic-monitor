@@ -9,6 +9,8 @@ Then open:  http://127.0.0.1:5000/
 """
  
 import time
+import json
+import os
 from datetime import datetime
  
 import joblib
@@ -26,16 +28,29 @@ model = joblib.load("traffic_model.pkl")
 KEY_FILE = "serviceAccountKey.json"
 DATABASE_URL = "https://smart-traffic-moniter-default-rtdb.asia-southeast1.firebasedatabase.app/"
  
+
 firebase_ready = False
+
 try:
+    firebase_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
+
+    if firebase_json:
+        firebase_credentials = json.loads(firebase_json)
+        firebase_cred = credentials.Certificate(firebase_credentials)
+    else:
+        firebase_cred = credentials.Certificate(KEY_FILE)
+
     firebase_admin.initialize_app(
-        credentials.Certificate(KEY_FILE), {"databaseURL": DATABASE_URL}
+        firebase_cred,
+        {"databaseURL": DATABASE_URL}
     )
+
     firebase_ready = True
     print("Firebase connected.")
+
 except Exception as error:
-    # The website and ML routes still work without Firebase
     print("WARNING: Firebase not connected:", error)
+
  
 # Same 6 roads as the website (id -> name)
 ROAD_NAMES = {
